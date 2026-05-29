@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Produto {
+  id          String   @id @default(cuid())
+  nome        String
+  descricao   String?
+  preco       Float
+  custo       Float    @default(0)
+  categoria   String   @default("Sorvete")
+  estoque     Int      @default(0)
+  ativo       Boolean  @default(true)
+  imagem      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  itensVenda  ItemVenda[]
+  itensCompra ItemCompra[]
+}
+
+model Venda {
+  id            String     @id @default(cuid())
+  numero        Int        @unique
+  dataVenda     DateTime   @default(now())
+  subtotal      Float
+  desconto      Float      @default(0)
+  total         Float
+  formaPagamento String    @default("Dinheiro")
+  status        String     @default("Concluida")
+  observacoes   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  itens         ItemVenda[]
+}
+
+model ItemVenda {
+  id            String   @id @default(cuid())
+  vendaId       String
+  produtoId     String
+  nomeProduto   String
+  quantidade    Int
+  precoUnitario Float
+  subtotal      Float
+  createdAt     DateTime @default(now())
+
+  venda         Venda    @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  produto       Produto  @relation(fields: [produtoId], references: [id])
+}
+
+model Compra {
+  id          String   @id @default(cuid())
+  numero      Int      @unique
+  dataCompra  DateTime @default(now())
+  fornecedor  String   @default("")
+  observacoes String?
+  totalCusto  Float    @default(0)
+  status      String   @default("Concluida")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  itens       ItemCompra[]
+}
+
+model ItemCompra {
+  id            String   @id @default(cuid())
+  compraId      String
+  produtoId     String
+  nomeProduto   String
+  quantidade    Int
+  custoUnitario Float
+  subtotal      Float
+  createdAt     DateTime @default(now())
+
+  compra        Compra   @relation(fields: [compraId], references: [id], onDelete: Cascade)
+  produto       Produto  @relation(fields: [produtoId], references: [id])
+}
+
+model Caixa {
+  id            String   @id @default(cuid())
+  dataAbertura  DateTime @default(now())
+  dataFechamento DateTime?
+  valorInicial  Float    @default(0)
+  valorFinal    Float?
+  totalVendas   Float    @default(0)
+  status        String   @default("Aberto")
+  observacoes   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
