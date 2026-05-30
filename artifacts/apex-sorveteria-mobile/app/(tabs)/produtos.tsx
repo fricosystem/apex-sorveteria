@@ -199,8 +199,8 @@ export default function ProdutosScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.catScroll, { borderBottomColor: c.border }]}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingVertical: 10 }}
+        style={[styles.catScroll, { borderBottomColor: c.border, height: 50 }]}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: "center" }}
       >
         {CATEGORIAS.map((cat) => (
           <TouchableOpacity

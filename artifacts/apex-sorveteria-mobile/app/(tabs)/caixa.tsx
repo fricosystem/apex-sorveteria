@@ -82,17 +82,19 @@ export default function CaixaScreen() {
   const load = useCallback(async () => {
     try {
       const [prodSnap, caixaSnap] = await Promise.all([
-        getDocs(query(collection(db, "produtos"), where("ativo", "==", true), orderBy("nome"))),
+        getDocs(query(collection(db, "produtos"), orderBy("nome"))),
         getDocs(query(collection(db, "caixas"), where("status", "==", "aberto"), limit(1))),
       ]);
-      const prods: Produto[] = prodSnap.docs.map((d) => ({
-        id: d.id,
-        nome: d.data().nome,
-        preco: d.data().preco ?? 0,
-        categoria: d.data().categoria ?? null,
-        estoque: d.data().estoque ?? 0,
-        ativo: d.data().ativo ?? true,
-      }));
+      const prods: Produto[] = prodSnap.docs
+        .map((d) => ({
+          id: d.id,
+          nome: d.data().nome ?? "",
+          preco: d.data().preco ?? 0,
+          categoria: d.data().categoria ?? null,
+          estoque: d.data().estoque ?? 0,
+          ativo: d.data().ativo !== false,
+        }))
+        .filter((p) => p.ativo);
       setProdutos(prods);
       if (!caixaSnap.empty) {
         const d = caixaSnap.docs[0];
@@ -274,7 +276,8 @@ export default function CaixaScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingVertical: 10 }}
+        style={{ height: 50 }}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: "center" }}
       >
         {CATEGORIAS.map((cat) => (
           <TouchableOpacity
