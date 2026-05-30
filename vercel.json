@@ -1,0 +1,8 @@
+{
+  "buildCommand": "pnpm --filter @workspace/apex-sorveteria run build",
+  "outputDirectory": "artifacts/apex-sorveteria/dist/public",
+  "installCommand": "pnpm install",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
