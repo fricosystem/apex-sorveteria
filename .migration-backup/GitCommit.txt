@@ -1,5 +1,0 @@
-git init
-git remote add origin https://github.com/fricosystem/apex-sorveteria.git
-git add .
-git commit -m "atualização 2"
-git push -u origin main --force
