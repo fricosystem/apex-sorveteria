@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import * as FS from '@/lib/firestore-service'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -171,13 +172,39 @@ export default function ComprasView() {
   const fetchCompras = useCallback(async () => {
     try {
       setLoadingCompras(true)
-      const params = new URLSearchParams()
-      if (dataInicio) params.set('dataInicio', dataInicio)
-      if (dataFim) params.set('dataFim', dataFim)
-      const res = await fetch(`/api/compras?${params.toString()}`)
-      if (!res.ok) throw new Error('Erro ao buscar compras')
-      const data = await res.json()
-      setCompras(Array.isArray(data) ? data : [])
+      
+      const constraints: import('@/lib/firestore-service').SimpleConstraint[] = []
+
+      if (dataInicio || dataFim) {
+        const start = dataInicio ? new Date(dataInicio) : null
+        const end = dataFim
+          ? (() => {
+              const d = new Date(dataFim)
+              d.setHours(23, 59, 59, 999)
+              return d
+            })()
+          : null
+
+        if (start && end) {
+          constraints.push({ field: 'dataCompra', op: '>=', value: start })
+          constraints.push({ field: 'dataCompra', op: '<=', value: end })
+        } else if (start) {
+          constraints.push({ field: 'dataCompra', op: '>=', value: start })
+        } else if (end) {
+          constraints.push({ field: 'dataCompra', op: '<=', value: end })
+        }
+      }
+      
+      const data = await FS.listDocuments<Compra>(FS.COLLECTIONS.COMPRAS, constraints, 'dataCompra', 'desc')
+      
+      const comprasWithItens = await Promise.all(
+        data.map(async (compra) => {
+          const itens = await FS.listSubDocuments<ItemCompra>(FS.COLLECTIONS.COMPRAS, compra.id, 'itens')
+          return { ...compra, itens }
+        })
+      )
+      
+      setCompras(comprasWithItens)
     } catch {
       toast.error('Erro ao carregar compras')
       setCompras([])
@@ -189,10 +216,8 @@ export default function ComprasView() {
   const fetchProdutos = useCallback(async () => {
     try {
       setLoadingProdutos(true)
-      const res = await fetch('/api/produtos')
-      if (!res.ok) throw new Error('Erro ao buscar produtos')
-      const data = await res.json()
-      setProdutos(Array.isArray(data) ? data : [])
+      const data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, [], 'createdAt', 'desc')
+      setProdutos(data)
     } catch {
       toast.error('Erro ao carregar produtos')
     } finally {
@@ -278,29 +303,44 @@ export default function ComprasView() {
     try {
       setSubmitting(true)
 
-      const res = await fetch('/api/compras', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itens: itensForm.map((item) => ({
-            produtoId: item.produtoId,
-            nomeProduto: item.nomeProduto,
-            quantidade: item.quantidade,
-            custoUnitario: item.custoUnitario,
-            subtotal: item.subtotal,
-          })),
-          fornecedor: fornecedor.trim(),
-          observacoes: observacoes.trim() || null,
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null)
-        throw new Error(errorData?.error || 'Erro ao registrar compra')
+      for (const item of itensForm) {
+        const produto = await FS.getDocument<Produto>(FS.COLLECTIONS.PRODUTOS, item.produtoId)
+        if (!produto) throw new Error(`Produto não encontrado: ${item.nomeProduto}`)
       }
 
-      const compra = await res.json()
-      toast.success(`Compra #${compra.numero} registrada com sucesso!`)
+      const totalCusto = itensForm.reduce((acc, item) => acc + item.subtotal, 0)
+      const nextNumero = await FS.getNextNumber('compras')
+      const compraId = FS.generateId()
+
+      await FS.createDocumentWithId(FS.COLLECTIONS.COMPRAS, compraId, {
+        id: compraId,
+        numero: nextNumero,
+        fornecedor: fornecedor.trim(),
+        status: 'Concluida',
+        observacoes: observacoes.trim() || null,
+        totalCusto,
+        dataCompra: FS.serverTimestamp(),
+      })
+
+      for (const item of itensForm) {
+        const itemId = FS.generateId()
+        await FS.addSubDocument(FS.COLLECTIONS.COMPRAS, compraId, 'itens', {
+          id: itemId,
+          produtoId: item.produtoId,
+          nomeProduto: item.nomeProduto,
+          quantidade: item.quantidade,
+          custoUnitario: item.custoUnitario,
+          subtotal: item.subtotal,
+          createdAt: FS.serverTimestamp(),
+        })
+      }
+
+      await FS.incrementStock(itensForm.map(item => ({
+        produtoId: item.produtoId,
+        quantidade: item.quantidade
+      })))
+
+      toast.success(`Compra #${nextNumero} registrada com sucesso!`)
       setDialogOpen(false)
       fetchCompras()
     } catch (err) {
@@ -315,8 +355,8 @@ export default function ComprasView() {
   async function handleDeleteCompra(compra: Compra) {
     try {
       setDeleting(true)
-      const res = await fetch(`/api/compras/${compra.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Erro ao excluir compra')
+      await FS.deleteSubCollection(FS.COLLECTIONS.COMPRAS, compra.id, 'itens')
+      await FS.deleteDocument(FS.COLLECTIONS.COMPRAS, compra.id)
       toast.success(`Compra #${compra.numero} excluída!`)
       setDeletingCompra(null)
       fetchCompras()

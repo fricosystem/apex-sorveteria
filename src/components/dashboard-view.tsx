@@ -53,6 +53,7 @@ import {
   parseISO,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { getDashboardData } from '@/lib/dashboard-service'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -411,14 +412,8 @@ export default function DashboardView() {
   const fetchDashboard = useCallback(async (selectedPeriod: PeriodType, startDate?: string, endDate?: string) => {
     setIsRefreshing(true)
     try {
-      let url = '/api/dashboard?periodo=' + selectedPeriod
-      if (selectedPeriod === 'customizado' && startDate && endDate) {
-        url += `&dataInicio=${startDate}&dataFim=${endDate}`
-      }
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(`Erro ${res.status}: ${res.statusText}`)
-      const json = await res.json()
-      setData(json)
+      const dashboardData = await getDashboardData(selectedPeriod, startDate, endDate)
+      setData(dashboardData as unknown as DashboardData)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
@@ -433,12 +428,9 @@ export default function DashboardView() {
     let cancelled = false
     async function load() {
       try {
-        const url = '/api/dashboard?periodo=mes'
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`Erro ${res.status}: ${res.statusText}`)
-        const json = await res.json()
+        const dashboardData = await getDashboardData('mes')
         if (!cancelled) {
-          setData(json)
+          setData(dashboardData as unknown as DashboardData)
           setError(null)
         }
       } catch (err) {

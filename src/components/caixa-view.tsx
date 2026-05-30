@@ -5,6 +5,7 @@ import { useStore, CartItem } from '@/lib/store'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import * as FS from '@/lib/firestore-service'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -158,13 +159,21 @@ export default function CaixaView() {
   const fetchProdutos = useCallback(async () => {
     try {
       setLoadingProdutos(true)
-      const params = new URLSearchParams()
-      if (selectedCategoria !== 'Todas') params.set('categoria', selectedCategoria)
-      if (searchQuery.trim()) params.set('search', searchQuery.trim())
-      const res = await fetch(`/api/produtos?${params.toString()}`)
-      if (!res.ok) throw new Error('Erro ao buscar produtos')
-      const data = await res.json()
-      setProdutos(Array.isArray(data) ? data : [])
+      const constraints: import('@/lib/firestore-service').SimpleConstraint[] = [
+        { field: 'ativo', op: '==', value: true }
+      ]
+      if (selectedCategoria !== 'Todas') {
+        constraints.push({ field: 'categoria', op: '==', value: selectedCategoria })
+      }
+      
+      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, constraints, 'createdAt', 'desc')
+      
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim()
+        data = data.filter((p) => String(p.nome).toLowerCase().includes(q))
+      }
+      
+      setProdutos(data)
     } catch {
       toast.error('Erro ao carregar produtos')
     } finally {
@@ -175,10 +184,13 @@ export default function CaixaView() {
   const fetchCaixa = useCallback(async () => {
     try {
       setLoadingCaixa(true)
-      const res = await fetch('/api/caixa?status=Aberto')
-      if (!res.ok) throw new Error('Erro ao buscar caixa')
-      const data = await res.json()
-      setCaixa(data)
+      const data = await FS.listDocuments<Caixa>(
+        FS.COLLECTIONS.CAIXA,
+        [{ field: 'status', op: '==', value: 'Aberto' }],
+        'dataAbertura',
+        'desc'
+      )
+      setCaixa(data.length > 0 ? data[0] : null)
     } catch {
       setCaixa(null)
     } finally {
@@ -214,7 +226,7 @@ export default function CaixaView() {
       return
     }
 
-    if (!isCaixaOpen) {
+    if (!isCaixaOpen || !caixa) {
       toast.error('Abra o caixa antes de finalizar uma venda')
       return
     }
@@ -230,24 +242,49 @@ export default function CaixaView() {
         subtotal: item.subtotal,
       }))
 
-      const res = await fetch('/api/vendas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itens,
-          desconto: discount,
-          formaPagamento: paymentMethod,
-          observacoes: '',
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Erro ao finalizar venda')
+      for (const item of itens) {
+        const produto = await FS.getDocument<Produto>(FS.COLLECTIONS.PRODUTOS, item.produtoId)
+        if (!produto) throw new Error(`Produto não encontrado: ${item.nomeProduto}`)
+        if (!produto.ativo) throw new Error(`Produto inativo: ${produto.nome}`)
+        if (produto.estoque < item.quantidade) throw new Error(`Estoque insuficiente para ${produto.nome}`)
       }
 
-      const venda = await res.json()
-      toast.success(`Venda #${venda.numero} realizada!`)
+      const subtotalVenda = itens.reduce((acc, item) => acc + item.quantidade * item.precoUnitario, 0)
+      const descontoValue = parseFloat(String(discount)) || 0
+      const totalVenda = subtotalVenda - descontoValue
+
+      const numero = await FS.getNextNumber(FS.COLLECTIONS.VENDAS)
+      const vendaId = FS.generateId()
+      
+      await FS.createDocumentWithId(FS.COLLECTIONS.VENDAS, vendaId, {
+        id: vendaId,
+        numero,
+        subtotal: subtotalVenda,
+        desconto: descontoValue,
+        total: totalVenda,
+        formaPagamento: paymentMethod,
+        status: 'Concluida',
+        observacoes: null,
+        caixaId: caixa.id,
+        dataVenda: FS.serverTimestamp(),
+      })
+
+      for (const item of itens) {
+        const itemId = FS.generateId()
+        await FS.addSubDocument(FS.COLLECTIONS.VENDAS, vendaId, 'itens', {
+          id: itemId,
+          produtoId: item.produtoId,
+          nomeProduto: item.nomeProduto,
+          quantidade: item.quantidade,
+          precoUnitario: item.precoUnitario,
+          subtotal: item.subtotal,
+          createdAt: FS.serverTimestamp(),
+        })
+      }
+
+      await FS.decrementStock(itens)
+
+      toast.success(`Venda #${numero} realizada!`)
       clearCart()
       setDiscount(0)
       setCartSheetOpen(false)
@@ -275,30 +312,58 @@ export default function CaixaView() {
       setSubmittingCaixa(true)
 
       if (dialogType === 'abrir-caixa') {
-        const res = await fetch('/api/caixa', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            valorInicial: parseFloat(valorInicial) || 0,
-            observacoes: '',
-          }),
-        })
+        const existing = await FS.listDocuments<Caixa>(
+          FS.COLLECTIONS.CAIXA,
+          [{ field: 'status', op: '==', value: 'Aberto' }],
+          'dataAbertura',
+          'desc'
+        )
 
-        if (!res.ok) {
-          const errorData = await res.json()
-          throw new Error(errorData.error || 'Erro ao abrir caixa')
+        if (existing.length > 0) {
+          throw new Error('Já existe um caixa aberto')
         }
+
+        const id = FS.generateId()
+        await FS.createDocumentWithId(FS.COLLECTIONS.CAIXA, id, {
+          valorInicial: parseFloat(valorInicial) || 0,
+          valorFinal: null,
+          totalVendas: null,
+          status: 'Aberto',
+          observacoes: null,
+          dataAbertura: FS.serverTimestamp(),
+          dataFechamento: null,
+          createdAt: FS.serverTimestamp(),
+          updatedAt: FS.serverTimestamp(),
+        })
 
         toast.success('Caixa aberto com sucesso!')
       } else {
-        const res = await fetch('/api/caixa?acao=fechar', {
-          method: 'POST',
+        if (!caixa) throw new Error('Nenhum caixa aberto encontrado')
+
+        const dataAberturaDate = new Date(caixa.dataAbertura)
+        const constraints = [
+          { field: 'dataVenda', op: '>=', value: dataAberturaDate },
+          { field: 'dataVenda', op: '<=', value: new Date() },
+          { field: 'status', op: '==', value: 'Concluida' }
+        ] as import('@/lib/firestore-service').SimpleConstraint[]
+        
+        const vendasSnap = await FS.listDocuments<{ total: number }>(FS.COLLECTIONS.VENDAS, constraints)
+        
+        let totalVendas = 0
+        vendasSnap.forEach((v) => {
+          if (typeof v.total === 'number') totalVendas += v.total
         })
 
-        if (!res.ok) {
-          const errorData = await res.json()
-          throw new Error(errorData.error || 'Erro ao fechar caixa')
-        }
+        const vInicial = (caixa.valorInicial as number) || 0
+        const vFinal = vInicial + totalVendas
+
+        await FS.updateDocument(FS.COLLECTIONS.CAIXA, caixa.id, {
+          dataFechamento: FS.serverTimestamp(),
+          valorFinal: vFinal,
+          totalVendas,
+          status: 'Fechado',
+          updatedAt: FS.serverTimestamp(),
+        })
 
         toast.success('Caixa fechado com sucesso!')
       }

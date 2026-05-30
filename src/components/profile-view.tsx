@@ -3,6 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useAuth } from '@/contexts/auth-context'
+import * as FS from '@/lib/firestore-service'
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -266,10 +269,44 @@ export default function ProfileView() {
     if (!user?.uid) return
     try {
       setStatsLoading(true)
-      const res = await fetch(`/api/profile/stats?uid=${user.uid}`)
-      if (!res.ok) throw new Error(`Erro ${res.status}`)
-      const json = await res.json()
-      setStats(json)
+
+      const [vendasSnap, comprasSnap, produtosSnap] = await Promise.all([
+        getDocs(collection(db, FS.COLLECTIONS.VENDAS)),
+        getDocs(collection(db, FS.COLLECTIONS.COMPRAS)),
+        getDocs(collection(db, FS.COLLECTIONS.PRODUTOS)),
+      ])
+
+      let totalVendas = 0
+      let totalReceita = 0
+      vendasSnap.forEach((d) => {
+        totalVendas++
+        const total = typeof d.data().total === 'number' ? d.data().total : 0
+        totalReceita += total
+      })
+
+      let totalCompras = 0
+      let totalCusto = 0
+      comprasSnap.forEach((d) => {
+        totalCompras++
+        const custo = typeof d.data().totalCusto === 'number' ? d.data().totalCusto : 0
+        totalCusto += custo
+      })
+
+      const produtosCadastrados = produtosSnap.docs.filter(
+        (d) => d.data().ativo === true
+      ).length
+
+      setStats({
+        totalVendas,
+        totalReceita,
+        totalCompras,
+        totalCusto,
+        lucroTotal: totalReceita - totalCusto,
+        ticketMedio: totalVendas > 0 ? totalReceita / totalVendas : 0,
+        produtosCadastrados,
+        caixasAbertos: 0,
+        membroDesde: '',
+      })
     } catch {
       // Stats are non-critical; silently fail
     } finally {
@@ -298,21 +335,22 @@ export default function ProfileView() {
       return
     }
 
+    if (!user?.uid) {
+      toast.error('Usuário não autenticado')
+      return
+    }
+
     setSaving(true)
     try {
-      const res = await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-uid': user?.uid || '' },
-        body: JSON.stringify({
-          nome: trimmedNome,
-          telefone: editTelefone.trim() || undefined,
-        }),
-      })
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error || `Erro ${res.status}`)
+      const updates: Record<string, unknown> = {
+        nome: trimmedNome,
+        updatedAt: FS.serverTimestamp(),
       }
+      if (editTelefone.trim()) {
+        updates.telefone = editTelefone.trim()
+      }
+
+      await updateDoc(doc(db, FS.COLLECTIONS.USUARIOS, user.uid), updates)
 
       toast.success('Perfil atualizado com sucesso!')
       setEditOpen(false)

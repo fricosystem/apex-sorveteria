@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
+import * as FS from '@/lib/firestore-service'
 
 import {
   Card,
@@ -150,18 +151,24 @@ export default function ProdutosView() {
   const fetchProdutos = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
+      const constraints: import('@/lib/firestore-service').SimpleConstraint[] = [
+        { field: 'ativo', op: '==', value: true }
+      ]
+
       if (categoriaFilter && categoriaFilter !== 'Todas') {
-        params.set('categoria', categoriaFilter)
-      }
-      if (search) {
-        params.set('search', search)
+        constraints.push({ field: 'categoria', op: '==', value: categoriaFilter })
       }
 
-      const res = await fetch(`/api/produtos?${params.toString()}`)
-      if (!res.ok) throw new Error('Erro ao buscar produtos')
-      const data = await res.json()
-      setProdutos(Array.isArray(data) ? data : data.produtos ?? [])
+      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, constraints, 'createdAt', 'desc')
+
+      if (search) {
+        const lowerSearch = search.toLowerCase()
+        data = data.filter((p) =>
+          String(p.nome).toLowerCase().includes(lowerSearch)
+        )
+      }
+
+      setProdutos(data)
     } catch {
       toast.error('Erro ao carregar produtos')
       setProdutos([])
@@ -199,36 +206,41 @@ export default function ProdutosView() {
   async function onSubmit(data: ProdutoFormData) {
     setSubmitting(true)
     try {
-      const payload = {
-        ...data,
-        descricao: data.descricao || null,
-        custo: data.custo ?? null,
-        categoria: data.categoria || null,
-        imagem: data.imagem || null,
-      }
-
       const isEditing = !!editingProduto
-      const url = isEditing
-        ? `/api/produtos/${editingProduto.id}`
-        : '/api/produtos'
-      const method = isEditing ? 'PUT' : 'POST'
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null)
-        throw new Error(errorData?.error || 'Erro ao salvar produto')
+      
+      if (isEditing && editingProduto) {
+        await FS.updateDocument(FS.COLLECTIONS.PRODUTOS, editingProduto.id, {
+          nome: data.nome,
+          descricao: data.descricao || null,
+          preco: Number(data.preco),
+          custo: data.custo !== undefined ? Number(data.custo) : 0,
+          categoria: data.categoria || 'Sorvete',
+          estoque: data.estoque !== undefined ? Number(data.estoque) : 0,
+          imagem: data.imagem || null,
+          updatedAt: FS.serverTimestamp(),
+        })
+        toast.success('Produto atualizado!')
+      } else {
+        const id = FS.generateId()
+        await FS.createDocumentWithId(FS.COLLECTIONS.PRODUTOS, id, {
+          nome: data.nome,
+          descricao: data.descricao || null,
+          preco: Number(data.preco),
+          custo: data.custo !== undefined ? Number(data.custo) : 0,
+          categoria: data.categoria || 'Sorvete',
+          estoque: data.estoque !== undefined ? Number(data.estoque) : 0,
+          ativo: true,
+          imagem: data.imagem || null,
+          createdAt: FS.serverTimestamp(),
+          updatedAt: FS.serverTimestamp(),
+        })
+        toast.success('Produto criado!')
       }
 
-      toast.success(isEditing ? 'Produto atualizado!' : 'Produto criado!')
       setDialogOpen(false)
       fetchProdutos()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro inesperado')
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar produto')
     } finally {
       setSubmitting(false)
     }
@@ -236,8 +248,10 @@ export default function ProdutosView() {
 
   async function handleDelete(id: string) {
     try {
-      const res = await fetch(`/api/produtos/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Erro ao excluir produto')
+      await FS.updateDocument(FS.COLLECTIONS.PRODUTOS, id, {
+        ativo: false,
+        updatedAt: FS.serverTimestamp(),
+      })
       toast.success('Produto excluído!')
       fetchProdutos()
     } catch {
