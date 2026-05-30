@@ -49,16 +49,16 @@ async function fetchDashboard(): Promise<DashboardData> {
     getDocs(
       query(
         collection(db, "vendas"),
-        where("createdAt", ">=", inicioTS),
-        where("createdAt", "<=", fimTS)
+        where("dataVenda", ">=", inicioTS),
+        where("dataVenda", "<=", fimTS)
       )
     ),
-    getDocs(query(collection(db, "caixas"), where("status", "==", "aberto"), limit(1))),
+    getDocs(query(collection(db, "caixa"), where("status", "==", "Aberto"), limit(1))),
     getDocs(query(collection(db, "produtos"), where("ativo", "==", true))),
   ]);
 
   const vendasConcluidas = vendasSnap.docs.filter(
-    (d) => d.data().status === "concluida"
+    (d) => d.data().status === "Concluida"
   );
   const receitaHoje = vendasConcluidas.reduce(
     (s, d) => s + ((d.data().total as number) || 0),

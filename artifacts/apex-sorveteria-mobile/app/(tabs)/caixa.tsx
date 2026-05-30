@@ -83,7 +83,7 @@ export default function CaixaScreen() {
     try {
       const [prodSnap, caixaSnap] = await Promise.all([
         getDocs(query(collection(db, "produtos"), orderBy("nome"))),
-        getDocs(query(collection(db, "caixas"), where("status", "==", "aberto"), limit(1))),
+        getDocs(query(collection(db, "caixa"), where("status", "==", "Aberto"), limit(1))),
       ]);
       const prods: Produto[] = prodSnap.docs
         .map((d) => ({
@@ -153,8 +153,8 @@ export default function CaixaScreen() {
         caixaId: caixaAtual.id,
         itens: saleItems.map((i) => ({
           produtoId: i.produtoId,
-          nome: i.nome,
-          preco: i.preco,
+          nomeProduto: i.nome,
+          precoUnitario: i.preco,
           quantidade: i.quantidade,
           subtotal: i.subtotal,
         })),
@@ -162,11 +162,11 @@ export default function CaixaScreen() {
         desconto: cart.discount,
         subtotal: saleItems.reduce((s, i) => s + i.subtotal, 0),
         formaPagamento: cart.paymentMethod,
-        status: "concluida",
-        createdAt: serverTimestamp(),
+        status: "Concluida",
+        dataVenda: serverTimestamp(),
       };
       await addDoc(collection(db, "vendas"), venda);
-      await updateDoc(doc(db, "caixas", caixaAtual.id), {
+      await updateDoc(doc(db, "caixa", caixaAtual.id), {
         totalVendas: increment(saleTotal),
       });
       for (const item of saleItems) {
@@ -198,12 +198,12 @@ export default function CaixaScreen() {
       const vendasHojeSnap = await getDocs(
         query(
           collection(db, "vendas"),
-          where("createdAt", ">=", TS.fromDate(hoje)),
-          where("createdAt", "<=", TS.fromDate(fimHoje)),
+          where("dataVenda", ">=", TS.fromDate(hoje)),
+          where("dataVenda", "<=", TS.fromDate(fimHoje)),
         ),
       );
       const vendasConcluidas = vendasHojeSnap.docs.filter(
-        (d) => d.data().status === "concluida",
+        (d) => d.data().status === "Concluida",
       );
       const receitaHoje = vendasConcluidas.reduce(
         (s, d) => s + ((d.data().total as number) || 0),
@@ -255,9 +255,9 @@ export default function CaixaScreen() {
                 text: "Fechar",
                 style: "destructive",
                 onPress: async () => {
-                  await updateDoc(doc(db, "caixas", caixaAtual!.id), {
-                    status: "fechado",
-                    dataFechamento: new Date().toISOString(),
+                  await updateDoc(doc(db, "caixa", caixaAtual!.id), {
+                    status: "Fechado",
+                    dataFechamento: serverTimestamp(),
                     updatedAt: serverTimestamp(),
                   });
                   setCaixaAtual(null);
@@ -467,12 +467,12 @@ function OpenCaixaModal({ visible, onClose, onOpened, c, insets }: any) {
   const open = async () => {
     setSaving(true);
     try {
-      await addDoc(collection(db, "caixas"), {
-        status: "aberto",
+      await addDoc(collection(db, "caixa"), {
+        status: "Aberto",
         valorInicial: parseFloat(valor) || 0,
         totalVendas: 0,
         valorFinal: null,
-        dataAbertura: new Date().toISOString(),
+        dataAbertura: serverTimestamp(),
         dataFechamento: null,
         createdAt: serverTimestamp(),
       });

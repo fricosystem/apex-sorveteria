@@ -36,16 +36,17 @@ interface Compra {
   id: string;
   numero: number;
   fornecedor: string;
-  status: "pendente" | "recebido" | "cancelado";
-  totalGeral: number;
-  dataPedido: string;
+  status: string;
+  totalCusto: number;
+  dataCompra: string;
   observacoes?: string | null;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  pendente: { label: "Pendente", color: "#d97706", bg: "#fef3c7" },
-  recebido: { label: "Recebido", color: "#16a34a", bg: "#dcfce7" },
-  cancelado: { label: "Cancelado", color: "#dc2626", bg: "#fee2e2" },
+  Pendente: { label: "Pendente", color: "#d97706", bg: "#fef3c7" },
+  Recebida: { label: "Recebida", color: "#16a34a", bg: "#dcfce7" },
+  Cancelada: { label: "Cancelada", color: "#dc2626", bg: "#fee2e2" },
+  Concluida: { label: "Concluída", color: "#16a34a", bg: "#dcfce7" },
 };
 
 export default function ComprasScreen() {
@@ -61,17 +62,26 @@ export default function ComprasScreen() {
   const load = useCallback(async () => {
     try {
       const snap = await getDocs(
-        query(collection(db, "compras"), orderBy("createdAt", "desc"))
+        query(collection(db, "compras"), orderBy("dataCompra", "desc"))
       );
-      const list: Compra[] = snap.docs.map((d) => ({
-        id: d.id,
-        numero: d.data().numero ?? 0,
-        fornecedor: d.data().fornecedor ?? "",
-        status: d.data().status ?? "pendente",
-        totalGeral: d.data().totalGeral ?? 0,
-        dataPedido: d.data().dataPedido ?? new Date().toISOString(),
-        observacoes: d.data().observacoes ?? null,
-      }));
+      const list: Compra[] = snap.docs.map((d) => {
+        const raw = d.data().dataCompra;
+        let dataCompra = new Date().toISOString();
+        if (raw && typeof raw === "object" && "toDate" in raw) {
+          dataCompra = raw.toDate().toISOString();
+        } else if (typeof raw === "string") {
+          dataCompra = raw;
+        }
+        return {
+          id: d.id,
+          numero: d.data().numero ?? 0,
+          fornecedor: d.data().fornecedor ?? "",
+          status: d.data().status ?? "Pendente",
+          totalCusto: d.data().totalCusto ?? 0,
+          dataCompra,
+          observacoes: d.data().observacoes ?? null,
+        };
+      });
       setCompras(list);
     } catch (e) {
       console.error(e);
@@ -110,7 +120,7 @@ export default function ComprasScreen() {
   };
 
   const renderItem = ({ item }: { item: Compra }) => {
-    const st = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.pendente;
+    const st = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.Pendente;
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}
@@ -131,25 +141,25 @@ export default function ComprasScreen() {
         <View style={styles.cardFooter}>
           <View style={styles.cardMeta}>
             <Feather name="calendar" size={12} color={c.mutedForeground} />
-            <Text style={[styles.metaText, { color: c.mutedForeground }]}>{formatDate(item.dataPedido)}</Text>
+            <Text style={[styles.metaText, { color: c.mutedForeground }]}>{formatDate(item.dataCompra)}</Text>
           </View>
-          <Text style={[styles.cardTotal, { color: c.primary }]}>{fmtBRL(item.totalGeral)}</Text>
+          <Text style={[styles.cardTotal, { color: c.primary }]}>{fmtBRL(item.totalCusto)}</Text>
         </View>
 
-        {item.status === "pendente" && (
+        {item.status === "Pendente" && (
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.actionBtnSmall, { backgroundColor: c.success + "20" }]}
-              onPress={() => updateStatus(item.id, "recebido")}
+              onPress={() => updateStatus(item.id, "Recebida")}
             >
               <Feather name="check" size={14} color={c.success ?? "#16a34a"} />
-              <Text style={[styles.actionSmallText, { color: c.success ?? "#16a34a" }]}>Recebido</Text>
+              <Text style={[styles.actionSmallText, { color: c.success ?? "#16a34a" }]}>Recebida</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtnSmall, { backgroundColor: c.destructive + "20" }]}
               onPress={() => Alert.alert("Cancelar", "Confirmar cancelamento?", [
                 { text: "Não" },
-                { text: "Sim", onPress: () => updateStatus(item.id, "cancelado"), style: "destructive" },
+                { text: "Sim", onPress: () => updateStatus(item.id, "Cancelada"), style: "destructive" },
               ])}
             >
               <Feather name="x" size={14} color={c.destructive} />
@@ -227,7 +237,7 @@ function CompraModal({ visible, onClose, onSaved, editItem, c }: any) {
   useEffect(() => {
     if (editItem) {
       setFornecedor(editItem.fornecedor);
-      setTotal(String(editItem.totalGeral));
+      setTotal(String(editItem.totalCusto));
       setObservacoes(editItem.observacoes ?? "");
     } else {
       setFornecedor("");
@@ -245,10 +255,10 @@ function CompraModal({ visible, onClose, onSaved, editItem, c }: any) {
     try {
       const data = {
         fornecedor: fornecedor.trim(),
-        totalGeral: parseFloat(total) || 0,
+        totalCusto: parseFloat(total) || 0,
         observacoes: observacoes.trim() || null,
-        status: "pendente",
-        dataPedido: new Date().toISOString(),
+        status: "Pendente",
+        dataCompra: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
       if (editItem) {
