@@ -151,15 +151,16 @@ export default function ProdutosView() {
   const fetchProdutos = useCallback(async () => {
     setLoading(true)
     try {
-      const constraints: import('@/lib/firestore-service').SimpleConstraint[] = [
-        { field: 'ativo', op: '==', value: true }
-      ]
+      // Fetch all products without Firestore orderBy to avoid missing-field exclusions.
+      // Documents that lack 'createdAt' would be silently dropped by Firestore orderBy.
+      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, [], null)
+
+      // Filter client-side: active only (treat missing field as active)
+      data = data.filter((p) => p.ativo !== false)
 
       if (categoriaFilter && categoriaFilter !== 'Todas') {
-        constraints.push({ field: 'categoria', op: '==', value: categoriaFilter })
+        data = data.filter((p) => p.categoria === categoriaFilter)
       }
-
-      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, constraints, 'createdAt', 'desc')
 
       if (search) {
         const lowerSearch = search.toLowerCase()
@@ -168,8 +169,12 @@ export default function ProdutosView() {
         )
       }
 
+      // Sort alphabetically by name
+      data.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
+
       setProdutos(data)
-    } catch {
+    } catch (err) {
+      console.error('Erro ao carregar produtos:', err)
       toast.error('Erro ao carregar produtos')
       setProdutos([])
     } finally {

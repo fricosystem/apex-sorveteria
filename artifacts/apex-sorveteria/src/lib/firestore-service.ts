@@ -134,15 +134,15 @@ function resolveConstraints(constraints: ConstraintInput[]): QueryConstraint[] {
 export async function listDocuments<T>(
   collectionName: string,
   constraints: ConstraintInput[] = [],
-  orderField = 'createdAt',
+  orderField: string | null = 'createdAt',
   orderDir: 'desc' | 'asc' = 'desc'
 ): Promise<(T & { id: string })[]> {
   const resolved = resolveConstraints(constraints)
-  const q = query(
-    collection(db, collectionName),
-    ...resolved,
-    orderBy(orderField, orderDir)
-  )
+  const queryConstraints: QueryConstraint[] = [...resolved]
+  if (orderField) {
+    queryConstraints.push(orderBy(orderField, orderDir))
+  }
+  const q = query(collection(db, collectionName), ...queryConstraints)
   const snap = await getDocs(q)
   return snap.docs.map((d) => docToData<T>(d))
 }

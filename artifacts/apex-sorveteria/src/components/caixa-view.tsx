@@ -133,8 +133,8 @@ export default function CaixaView() {
   const [valorInicial, setValorInicial] = useState('')
   const [submittingCaixa, setSubmittingCaixa] = useState(false)
 
-  // Mobile cart sheet
-  const [cartSheetOpen, setCartSheetOpen] = useState(false)
+  // Mobile cart sheet — starts open, stays open until user explicitly closes
+  const [cartSheetOpen, setCartSheetOpen] = useState(true)
 
   // ── Derived ──────────────────────────────────────────────────────────
 
@@ -168,22 +168,29 @@ export default function CaixaView() {
   const fetchProdutos = useCallback(async () => {
     try {
       setLoadingProdutos(true)
-      const constraints: import('@/lib/firestore-service').SimpleConstraint[] = [
-        { field: 'ativo', op: '==', value: true }
-      ]
+
+      // Fetch all products without Firestore orderBy — documents missing 'createdAt'
+      // would be silently excluded by Firestore, so we filter and sort client-side.
+      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, [], null)
+
+      // Filter client-side: active only (treat missing field as active)
+      data = data.filter((p) => p.ativo !== false)
+
       if (selectedCategoria !== 'Todas') {
-        constraints.push({ field: 'categoria', op: '==', value: selectedCategoria })
+        data = data.filter((p) => p.categoria === selectedCategoria)
       }
-      
-      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, constraints, 'createdAt', 'desc')
-      
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim()
         data = data.filter((p) => String(p.nome).toLowerCase().includes(q))
       }
-      
+
+      // Sort alphabetically by name
+      data.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
+
       setProdutos(data)
-    } catch {
+    } catch (err) {
+      console.error('Erro ao carregar produtos:', err)
       toast.error('Erro ao carregar produtos')
     } finally {
       setLoadingProdutos(false)
@@ -296,7 +303,6 @@ export default function CaixaView() {
       toast.success(`Venda #${numero} realizada!`)
       clearCart()
       setDiscount(0)
-      setCartSheetOpen(false)
       fetchCaixa()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao finalizar venda')
