@@ -33,6 +33,7 @@ import { db } from "@/lib/firebase";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/contexts/cart-context";
 import type { PaymentMethod } from "@/contexts/cart-context";
+import { sendLowStockAlert, scheduleDailySummaryNotification } from "@/lib/notifications";
 
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const fmtBRL = (v: number) => fmt.format(v);
@@ -141,37 +142,73 @@ export default function CaixaScreen() {
   const finalizeSale = async () => {
     if (!caixaAtual || cart.items.length === 0) return;
     setCheckoutVisible(false);
+    const saleTotal = cart.total;
+    const saleItems = [...cart.items];
     try {
       const numero = (await getDocs(collection(db, "vendas"))).size + 1;
       const venda = {
         numero,
         caixaId: caixaAtual.id,
-        itens: cart.items.map((i) => ({
+        itens: saleItems.map((i) => ({
           produtoId: i.produtoId,
           nome: i.nome,
           preco: i.preco,
           quantidade: i.quantidade,
           subtotal: i.subtotal,
         })),
-        total: cart.total,
+        total: saleTotal,
         desconto: cart.discount,
-        subtotal: cart.items.reduce((s, i) => s + i.subtotal, 0),
+        subtotal: saleItems.reduce((s, i) => s + i.subtotal, 0),
         formaPagamento: cart.paymentMethod,
         status: "concluida",
         createdAt: serverTimestamp(),
       };
       await addDoc(collection(db, "vendas"), venda);
       await updateDoc(doc(db, "caixas", caixaAtual.id), {
-        totalVendas: increment(cart.total),
+        totalVendas: increment(saleTotal),
       });
-      for (const item of cart.items) {
+      for (const item of saleItems) {
         await updateDoc(doc(db, "produtos", item.produtoId), {
           estoque: increment(-item.quantidade),
         });
       }
       cart.clearCart();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Venda Registrada!", `Total: ${fmtBRL(cart.total)}`);
+      Alert.alert("Venda Registrada!", `Total: ${fmtBRL(saleTotal)}`);
+
+      const newCaixaTotal = caixaAtual.totalVendas + saleTotal;
+
+      for (const item of saleItems) {
+        const prod = produtos.find((p) => p.id === item.produtoId);
+        if (prod) {
+          const newStock = prod.estoque - item.quantidade;
+          if (newStock <= 5 && newStock >= 0) {
+            sendLowStockAlert(prod.nome, newStock);
+          }
+        }
+      }
+
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const fimHoje = new Date();
+      fimHoje.setHours(23, 59, 59, 999);
+      const { Timestamp: TS } = await import("firebase/firestore");
+      const vendasHojeSnap = await getDocs(
+        query(
+          collection(db, "vendas"),
+          where("createdAt", ">=", TS.fromDate(hoje)),
+          where("createdAt", "<=", TS.fromDate(fimHoje)),
+        ),
+      );
+      const vendasConcluidas = vendasHojeSnap.docs.filter(
+        (d) => d.data().status === "concluida",
+      );
+      const receitaHoje = vendasConcluidas.reduce(
+        (s, d) => s + ((d.data().total as number) || 0),
+        0,
+      );
+      scheduleDailySummaryNotification(receitaHoje, vendasConcluidas.length, newCaixaTotal);
+
       load();
     } catch (e) {
       Alert.alert("Erro", "Não foi possível registrar a venda.");
