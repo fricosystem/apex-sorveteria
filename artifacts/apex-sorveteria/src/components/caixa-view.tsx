@@ -34,6 +34,7 @@ import {
   Store,
   CircleDollarSign,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -82,6 +83,15 @@ const CATEGORIAS = [
   'Bebidas',
   'Complementos',
 ]
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Potes: 'bg-rose-100 text-rose-700 border-rose-200',
+  'Picolés': 'bg-sky-100 text-sky-700 border-sky-200',
+  Massas: 'bg-amber-100 text-amber-700 border-amber-200',
+  'Açaí': 'bg-purple-100 text-purple-700 border-purple-200',
+  Bebidas: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  Complementos: 'bg-orange-100 text-orange-700 border-orange-200',
+}
 
 const PAYMENT_OPTIONS = [
   { value: 'Dinheiro', label: 'Dinheiro', icon: Banknote },
@@ -423,21 +433,29 @@ export default function CaixaView() {
 
         {/* Category Tabs - horizontal scroll */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {CATEGORIAS.map((cat) => (
-            <Button
-              key={cat}
-              variant={selectedCategoria === cat ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategoria(cat)}
-              className="whitespace-nowrap shrink-0 text-xs sm:text-sm h-9 sm:h-8 px-3 sm:px-3 rounded-full"
-            >
-              {cat}
-            </Button>
-          ))}
+          {CATEGORIAS.map((cat) => {
+            const isActive = selectedCategoria === cat
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategoria(cat)}
+                className={cn(
+                  'whitespace-nowrap shrink-0 inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  isActive
+                    ? cat === 'Todas'
+                      ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                      : (CATEGORY_COLORS[cat] || 'bg-rose-100 text-rose-700 border-rose-200') + ' shadow-sm'
+                    : 'bg-background text-muted-foreground border-border hover:border-muted-foreground/40 hover:text-foreground',
+                )}
+              >
+                {cat}
+              </button>
+            )
+          })}
         </div>
 
         {/* Product Grid - responsive */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3 flex-1 overflow-y-auto pb-20 lg:pb-2 pr-0.5 scrollbar-thin">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3 flex-1 overflow-y-auto pb-32 md:pb-20 lg:pb-2 pr-0.5 scrollbar-thin">
           {loadingProdutos ? (
             Array.from({ length: 6 }).map((_, i) => (
               <Card key={i} className="overflow-hidden">
@@ -680,7 +698,7 @@ export default function CaixaView() {
         {itemCount > 0 && (
           <button
             onClick={() => setCartSheetOpen(true)}
-            className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between bg-rose-600 active:bg-rose-800 text-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(244,63,94,0.3)] transition-all active:scale-[0.99]"
+            className="fixed bottom-14 md:bottom-0 left-0 right-0 z-40 flex items-center justify-between bg-rose-600 active:bg-rose-800 text-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4 shadow-[0_-4px_20px_rgba(244,63,94,0.3)] transition-all active:scale-[0.99]"
           >
             <div className="flex items-center gap-2.5">
               <div className="relative">

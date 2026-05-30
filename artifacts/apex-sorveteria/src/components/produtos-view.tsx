@@ -52,6 +52,7 @@ import {
   AlertTriangle,
   IceCream,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -341,17 +342,25 @@ export default function ProdutosView() {
 
       {/* Category filter chips */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {CATEGORIAS.map((cat) => (
-          <Button
-            key={cat}
-            variant={categoriaFilter === cat ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setCategoriaFilter(cat)}
-            className="whitespace-nowrap shrink-0 text-xs sm:text-sm h-9 px-3 rounded-full"
-          >
-            {cat}
-          </Button>
-        ))}
+        {CATEGORIAS.map((cat) => {
+          const isActive = categoriaFilter === cat
+          return (
+            <button
+              key={cat}
+              onClick={() => setCategoriaFilter(cat)}
+              className={cn(
+                'whitespace-nowrap shrink-0 inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                isActive
+                  ? cat === 'Todas'
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                    : (CATEGORY_COLORS[cat] || 'bg-rose-100 text-rose-700 border-rose-200') + ' shadow-sm'
+                  : 'bg-background text-muted-foreground border-border hover:border-muted-foreground/40 hover:text-foreground',
+              )}
+            >
+              {cat}
+            </button>
+          )
+        })}
       </div>
 
       {/* Products Grid */}

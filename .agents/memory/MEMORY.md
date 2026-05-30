@@ -1,0 +1,3 @@
+- [APEX Sorveteria stack](apex-stack.md) — Firebase (Auth+Firestore client SDK), Vite+React web, Expo mobile, pnpm monorepo.
+- [Category filter chips pattern](category-chips.md) — Both Produtos and Caixa views use custom badge-style button chips (not Button component) with CATEGORY_COLORS map.
+- [Mobile nav pattern](mobile-nav.md) — Bottom nav (md:hidden, z-30, h-14) + hamburger sidebar. Caixa cart bar is bottom-14 md:bottom-0 to sit above bottom nav on mobile.
