@@ -47,7 +47,7 @@ function AppContent() {
         <div className="flex flex-col items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-black shadow-xl shadow-rose-500/25 overflow-hidden">
             <img
-              src="/apex-logo.png"
+              src="/icon-512.png"
               alt="APEX Logo"
               className="h-10 w-10 object-contain"
             />
@@ -87,7 +87,7 @@ function AppContent() {
         <div className="flex h-14 items-center gap-3 border-b px-3 sm:px-4">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black overflow-hidden">
             <img
-              src="/apex-logo.png"
+              src="/icon-512.png"
               alt="APEX Logo"
               className="h-6 w-6 object-contain"
             />
