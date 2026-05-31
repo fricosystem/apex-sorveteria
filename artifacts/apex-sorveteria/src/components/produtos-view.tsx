@@ -163,7 +163,7 @@ export default function ProdutosView() {
         setFetchError(null)
       },
       (err) => {
-        console.error('[Produtos] onSnapshot error:', err.code, err.message)
+        void err
         setFetchError(`${err.code}: ${err.message}`)
         toast.error('Erro ao carregar produtos')
         setLoading(false)

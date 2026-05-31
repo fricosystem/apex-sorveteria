@@ -177,7 +177,7 @@ export default function CaixaView() {
         setLoadingProdutos(false)
       },
       (err) => {
-        console.error('[Caixa] onSnapshot produtos error:', err.code, err.message)
+        void err
         toast.error(`Erro ao carregar produtos: ${err.code}`)
         setLoadingProdutos(false)
       }

@@ -163,7 +163,6 @@ export function subscribeToCollection<T>(
   const q = query(collection(db, collectionName))
   return onSnapshot(q, (snap) => {
     const docs = snap.docs.map((d) => docToData<T>(d))
-    console.log(`[Firestore] ${collectionName}: ${docs.length} docs recebidos via onSnapshot`)
     onData(docs)
   }, onError)
 }

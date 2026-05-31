@@ -56,32 +56,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [userData, setUserData] = useState<UsuarioData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [ready, setReady] = useState(false) // Firebase auth state has been checked
+  const [ready, setReady] = useState(false)
   const authCheckedRef = useRef(false)
 
   const fetchUserData = useCallback(async (uid: string) => {
     try {
-      console.log('[Auth] Fetching user data for uid:', uid)
       const docRef = doc(db, 'usuarios', uid)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data() as UsuarioData
-        console.log('[Auth] User data found:', data)
         setUserData(data)
-      } else {
-        console.log('[Auth] No user data found in Firestore')
       }
-    } catch (error) {
-      console.error('[Auth] Error fetching user data:', error)
+    } catch {
+      // silent — auth state will still work without extra profile data
     }
   }, [])
 
   useEffect(() => {
-    console.log('[Auth] Initializing AuthProvider')
-    // Safety timeout: if Firebase doesn't respond in 4s, show login page
     const safetyTimeout = setTimeout(() => {
       if (!authCheckedRef.current) {
-        console.warn('[Auth] Safety timeout triggered - showing login page')
         authCheckedRef.current = true
         setReady(true)
         setLoading(false)
@@ -92,9 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubscribe: (() => void) | null = null
 
     try {
-      console.log('[Auth] Setting up onAuthStateChanged listener')
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        console.log('[Auth] onAuthStateChanged fired, user:', firebaseUser)
         authCheckedRef.current = true
         clearTimeout(safetyTimeout)
 
@@ -107,9 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false)
         setReady(true)
       })
-    } catch (err) {
-      console.error('[Auth] Firebase auth initialization error:', err)
-      // If Firebase fails to initialize, show login page
+    } catch {
       authCheckedRef.current = true
       clearTimeout(safetyTimeout)
       setUser(null)
@@ -125,17 +114,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUserData])
 
   const login = useCallback(async (email: string, senha: string) => {
-    console.log('[Auth] Login attempt for email:', email)
     setLoading(true)
     try {
       const cred = await signInWithEmailAndPassword(auth, email, senha)
-      console.log('[Auth] Login successful for user:', cred.user.uid)
-      // Atualizar o estado do usuario imediatamente apos login bem-sucedido
       setUser(cred.user)
       await fetchUserData(cred.user.uid)
-      console.log('[Auth] User state updated after login')
     } catch (error) {
-      console.error('[Auth] Login error:', error)
       throw error
     } finally {
       setLoading(false)
@@ -143,14 +127,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUserData])
 
   const register = useCallback(async (nome: string, email: string, senha: string) => {
-    console.log('[Auth] Register attempt for email:', email)
     setLoading(true)
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, senha)
-      console.log('[Auth] User created:', cred.user.uid)
       await updateProfile(cred.user, { displayName: nome })
 
-      // Persist user data in Firestore "usuarios" collection
       const usuarioData: Omit<UsuarioData, 'uid'> & { uid: string } = {
         uid: cred.user.uid,
         nome,
@@ -162,15 +143,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         await setDoc(doc(db, 'usuarios', cred.user.uid), usuarioData)
-        console.log('[Auth] User data saved to Firestore')
-      } catch (error) {
-        console.error('[Auth] Error saving user data to Firestore:', error)
+      } catch {
+        // profile data save failed — user can still log in
       }
 
-      // Fetch user data to complete registration
       await fetchUserData(cred.user.uid)
     } catch (error) {
-      console.error('[Auth] Registration error:', error)
       throw error
     } finally {
       setLoading(false)
@@ -178,12 +156,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
-    console.log('[Auth] Logout attempt')
     try {
       await signOut(auth)
-      console.log('[Auth] Logout successful')
-    } catch (error) {
-      console.error('[Auth] Logout error:', error)
+    } catch {
+      // ignore logout errors
     }
     setUser(null)
     setUserData(null)

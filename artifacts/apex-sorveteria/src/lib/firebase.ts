@@ -1,9 +1,3 @@
-/**
- * Firebase Client SDK — Server/Client shared
- *
- * Used by both server-side API routes and client-side components.
- */
-
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -17,16 +11,6 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
-
-// Log config health at startup (values are redacted)
-const missing = Object.entries(firebaseConfig)
-  .filter(([, v]) => !v)
-  .map(([k]) => k)
-if (missing.length > 0) {
-  console.warn('[Firebase] Variáveis ausentes:', missing)
-} else {
-  console.log('[Firebase] Config OK — projectId:', firebaseConfig.projectId)
-}
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
