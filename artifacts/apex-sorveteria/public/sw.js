@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gelado-v1';
+const CACHE_NAME = 'apex-hub-v1';
 const STATIC_ASSETS = [
   '/',
   '/icon-192.png',
@@ -33,17 +33,13 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // API calls: network first
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => caches.match(event.request))
-    );
+  // Never cache API, Firebase, or dynamic requests
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.hostname.includes('firestore.googleapis.com') ||
+    url.hostname.includes('firebase') ||
+    url.hostname.includes('googleapis.com')
+  ) {
     return;
   }
 
