@@ -1,10 +1,11 @@
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import * as FS from '@/lib/firestore-service'
+import { FirebaseDiagnosticModal } from '@/components/firebase-diagnostic-modal'
 
 import {
   Card,
@@ -52,6 +53,7 @@ import {
   AlertTriangle,
   IceCream,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -113,13 +115,16 @@ type ProdutoFormData = z.infer<typeof produtoSchema>
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProdutosView() {
-  const [produtos, setProdutos] = useState<Produto[]>([])
+  const [allProdutos, setAllProdutos] = useState<Produto[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [categoriaFilter, setCategoriaFilter] = useState('Todas')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
+  const [diagOpen, setDiagOpen] = useState(false)
 
   const form = useForm<ProdutoFormData>({
     resolver: zodResolver(produtoSchema),
@@ -145,40 +150,39 @@ export default function ProdutosView() {
 
   const selectedCategoria = watch('categoria')
 
-  // ─── Fetch ─────────────────────────────────────────────────────────────────
-
-  const fetchProdutos = useCallback(async () => {
-    setLoading(true)
-    try {
-      const constraints: import('@/lib/firestore-service').SimpleConstraint[] = [
-        { field: 'ativo', op: '==', value: true }
-      ]
-
-      if (categoriaFilter && categoriaFilter !== 'Todas') {
-        constraints.push({ field: 'categoria', op: '==', value: categoriaFilter })
-      }
-
-      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, constraints, 'createdAt', 'desc')
-
-      if (search) {
-        const lowerSearch = search.toLowerCase()
-        data = data.filter((p) =>
-          String(p.nome).toLowerCase().includes(lowerSearch)
-        )
-      }
-
-      setProdutos(data)
-    } catch {
-      toast.error('Erro ao carregar produtos')
-      setProdutos([])
-    } finally {
-      setLoading(false)
-    }
-  }, [categoriaFilter, search])
+  // ─── Fetch (realtime via onSnapshot) ───────────────────────────────────────
 
   useEffect(() => {
-    fetchProdutos()
-  }, [fetchProdutos])
+    setLoading(true)
+    setFetchError(null)
+    const unsub = FS.subscribeToCollection<Produto>(
+      FS.COLLECTIONS.PRODUTOS,
+      (docs) => {
+        setAllProdutos(docs)
+        setLoading(false)
+        setFetchError(null)
+      },
+      (err) => {
+        console.error('[Produtos] onSnapshot error:', err.code, err.message)
+        setFetchError(`${err.code}: ${err.message}`)
+        toast.error('Erro ao carregar produtos')
+        setLoading(false)
+      }
+    )
+    return unsub
+  }, [retryCount])
+
+  const produtos = useMemo(() => {
+    let data = allProdutos.filter((p) => p.ativo !== false)
+    if (categoriaFilter !== 'Todas') {
+      data = data.filter((p) => p.categoria === categoriaFilter)
+    }
+    if (search) {
+      const lowerSearch = search.toLowerCase()
+      data = data.filter((p) => String(p.nome).toLowerCase().includes(lowerSearch))
+    }
+    return [...data].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
+  }, [allProdutos, categoriaFilter, search])
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
@@ -237,7 +241,7 @@ export default function ProdutosView() {
       }
 
       setDialogOpen(false)
-      fetchProdutos()
+      // onSnapshot updates automatically — no manual refetch needed
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar produto')
     } finally {
@@ -252,7 +256,7 @@ export default function ProdutosView() {
         updatedAt: FS.serverTimestamp(),
       })
       toast.success('Produto excluído!')
-      fetchProdutos()
+      // onSnapshot updates automatically
     } catch {
       toast.error('Erro ao excluir produto')
     }
@@ -306,6 +310,39 @@ export default function ProdutosView() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
+      {/* Error banner */}
+      {fetchError && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-destructive">Erro ao carregar produtos</p>
+            <p className="text-xs text-destructive/80 mt-0.5 break-all font-mono">{fetchError}</p>
+          </div>
+          <div className="flex flex-col gap-1 shrink-0">
+            <button
+              onClick={() => setDiagOpen(true)}
+              className="text-xs text-destructive underline underline-offset-2"
+            >
+              Como resolver
+            </button>
+            <button
+              onClick={() => setRetryCount(c => c + 1)}
+              className="text-xs text-destructive/70 underline underline-offset-2"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Firebase Diagnostic Modal */}
+      <FirebaseDiagnosticModal
+        open={diagOpen}
+        onOpenChange={setDiagOpen}
+        errorCode={fetchError?.split(':')[0] ?? null}
+        errorMessage={fetchError?.split(':').slice(1).join(':').trim() ?? null}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -341,17 +378,25 @@ export default function ProdutosView() {
 
       {/* Category filter chips */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {CATEGORIAS.map((cat) => (
-          <Button
-            key={cat}
-            variant={categoriaFilter === cat ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setCategoriaFilter(cat)}
-            className="whitespace-nowrap shrink-0 text-xs sm:text-sm h-9 px-3 rounded-full"
-          >
-            {cat}
-          </Button>
-        ))}
+        {CATEGORIAS.map((cat) => {
+          const isActive = categoriaFilter === cat
+          return (
+            <button
+              key={cat}
+              onClick={() => setCategoriaFilter(cat)}
+              className={cn(
+                'whitespace-nowrap shrink-0 inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                isActive
+                  ? cat === 'Todas'
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                    : (CATEGORY_COLORS[cat] || 'bg-rose-100 text-rose-700 border-rose-200') + ' shadow-sm'
+                  : 'bg-background text-muted-foreground border-border hover:border-muted-foreground/40 hover:text-foreground',
+              )}
+            >
+              {cat}
+            </button>
+          )
+        })}
       </div>
 
       {/* Products Grid */}

@@ -196,7 +196,7 @@ function AppContent() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pb-14 md:pb-0">
           <div className="p-3 sm:p-4 md:p-6">
             {activeView === "dashboard" && <DashboardView />}
             {activeView === "produtos" && <ProdutosView />}
@@ -206,6 +206,43 @@ function AppContent() {
           </div>
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 flex h-14 items-center border-t bg-card md:hidden">
+        {navItems.filter((n) => n.key !== "perfil").map((item) => {
+          const Icon = item.icon;
+          const isActive = activeView === item.key;
+          return (
+            <button
+              key={item.key}
+              onClick={() => {
+                setActiveView(item.key);
+                setSidebarOpen(false);
+              }}
+              className={cn(
+                "flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors",
+                isActive ? "text-rose-600" : "text-muted-foreground"
+              )}
+            >
+              <Icon className={cn("h-5 w-5", isActive && "text-rose-600")} />
+              <span>{item.label === "Caixa / PDV" ? "Caixa" : item.label}</span>
+            </button>
+          );
+        })}
+        <button
+          onClick={() => {
+            setActiveView("perfil");
+            setSidebarOpen(false);
+          }}
+          className={cn(
+            "flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors",
+            activeView === "perfil" ? "text-rose-600" : "text-muted-foreground"
+          )}
+        >
+          <UserCircle className={cn("h-5 w-5", activeView === "perfil" && "text-rose-600")} />
+          <span>Perfil</span>
+        </button>
+      </nav>
     </div>
   );
 }
