@@ -18,12 +18,14 @@ import {
   where,
   orderBy,
   limit,
+  onSnapshot,
   Timestamp,
   runTransaction,
   increment,
   type DocumentData,
   type QueryConstraint,
   type QueryDocumentSnapshot,
+  type FirestoreError,
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore'
@@ -145,6 +147,25 @@ export async function listDocuments<T>(
   const q = query(collection(db, collectionName), ...queryConstraints)
   const snap = await getDocs(q)
   return snap.docs.map((d) => docToData<T>(d))
+}
+
+/**
+ * Real-time listener for a collection.
+ * Returns an unsubscribe function — call it in useEffect cleanup.
+ * Uses client-side filtering only (no Firestore orderBy) to avoid
+ * composite-index requirements and missing-field exclusions.
+ */
+export function subscribeToCollection<T>(
+  collectionName: string,
+  onData: (docs: (T & { id: string })[]) => void,
+  onError: (err: FirestoreError) => void
+): () => void {
+  const q = query(collection(db, collectionName))
+  return onSnapshot(q, (snap) => {
+    const docs = snap.docs.map((d) => docToData<T>(d))
+    console.log(`[Firestore] ${collectionName}: ${docs.length} docs recebidos via onSnapshot`)
+    onData(docs)
+  }, onError)
 }
 
 /** Count documents matching constraints */

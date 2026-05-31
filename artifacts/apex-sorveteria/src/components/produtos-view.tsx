@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -114,13 +114,15 @@ type ProdutoFormData = z.infer<typeof produtoSchema>
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProdutosView() {
-  const [produtos, setProdutos] = useState<Produto[]>([])
+  const [allProdutos, setAllProdutos] = useState<Produto[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [categoriaFilter, setCategoriaFilter] = useState('Todas')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
 
   const form = useForm<ProdutoFormData>({
     resolver: zodResolver(produtoSchema),
@@ -146,45 +148,39 @@ export default function ProdutosView() {
 
   const selectedCategoria = watch('categoria')
 
-  // ─── Fetch ─────────────────────────────────────────────────────────────────
-
-  const fetchProdutos = useCallback(async () => {
-    setLoading(true)
-    try {
-      // Fetch all products without Firestore orderBy to avoid missing-field exclusions.
-      // Documents that lack 'createdAt' would be silently dropped by Firestore orderBy.
-      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, [], null)
-
-      // Filter client-side: active only (treat missing field as active)
-      data = data.filter((p) => p.ativo !== false)
-
-      if (categoriaFilter && categoriaFilter !== 'Todas') {
-        data = data.filter((p) => p.categoria === categoriaFilter)
-      }
-
-      if (search) {
-        const lowerSearch = search.toLowerCase()
-        data = data.filter((p) =>
-          String(p.nome).toLowerCase().includes(lowerSearch)
-        )
-      }
-
-      // Sort alphabetically by name
-      data.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
-
-      setProdutos(data)
-    } catch (err) {
-      console.error('Erro ao carregar produtos:', err)
-      toast.error('Erro ao carregar produtos')
-      setProdutos([])
-    } finally {
-      setLoading(false)
-    }
-  }, [categoriaFilter, search])
+  // ─── Fetch (realtime via onSnapshot) ───────────────────────────────────────
 
   useEffect(() => {
-    fetchProdutos()
-  }, [fetchProdutos])
+    setLoading(true)
+    setFetchError(null)
+    const unsub = FS.subscribeToCollection<Produto>(
+      FS.COLLECTIONS.PRODUTOS,
+      (docs) => {
+        setAllProdutos(docs)
+        setLoading(false)
+        setFetchError(null)
+      },
+      (err) => {
+        console.error('[Produtos] onSnapshot error:', err.code, err.message)
+        setFetchError(`${err.code}: ${err.message}`)
+        toast.error('Erro ao carregar produtos')
+        setLoading(false)
+      }
+    )
+    return unsub
+  }, [retryCount])
+
+  const produtos = useMemo(() => {
+    let data = allProdutos.filter((p) => p.ativo !== false)
+    if (categoriaFilter !== 'Todas') {
+      data = data.filter((p) => p.categoria === categoriaFilter)
+    }
+    if (search) {
+      const lowerSearch = search.toLowerCase()
+      data = data.filter((p) => String(p.nome).toLowerCase().includes(lowerSearch))
+    }
+    return [...data].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
+  }, [allProdutos, categoriaFilter, search])
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
@@ -243,7 +239,7 @@ export default function ProdutosView() {
       }
 
       setDialogOpen(false)
-      fetchProdutos()
+      // onSnapshot updates automatically — no manual refetch needed
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao salvar produto')
     } finally {
@@ -258,7 +254,7 @@ export default function ProdutosView() {
         updatedAt: FS.serverTimestamp(),
       })
       toast.success('Produto excluído!')
-      fetchProdutos()
+      // onSnapshot updates automatically
     } catch {
       toast.error('Erro ao excluir produto')
     }
@@ -312,6 +308,23 @@ export default function ProdutosView() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
+      {/* Error banner */}
+      {fetchError && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-destructive">Erro ao carregar produtos</p>
+            <p className="text-xs text-destructive/80 mt-0.5 break-all">{fetchError}</p>
+          </div>
+          <button
+            onClick={() => setRetryCount(c => c + 1)}
+            className="text-xs text-destructive underline underline-offset-2 shrink-0"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">

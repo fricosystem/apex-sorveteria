@@ -165,37 +165,25 @@ export default function CaixaView() {
 
   // ── Data Fetching ────────────────────────────────────────────────────
 
-  const fetchProdutos = useCallback(async () => {
-    try {
-      setLoadingProdutos(true)
-
-      // Fetch all products without Firestore orderBy — documents missing 'createdAt'
-      // would be silently excluded by Firestore, so we filter and sort client-side.
-      let data = await FS.listDocuments<Produto>(FS.COLLECTIONS.PRODUTOS, [], null)
-
-      // Filter client-side: active only (treat missing field as active)
-      data = data.filter((p) => p.ativo !== false)
-
-      if (selectedCategoria !== 'Todas') {
-        data = data.filter((p) => p.categoria === selectedCategoria)
+  useEffect(() => {
+    setLoadingProdutos(true)
+    const unsub = FS.subscribeToCollection<Produto>(
+      FS.COLLECTIONS.PRODUTOS,
+      (docs) => {
+        // Filter active products client-side (treat missing ativo field as active)
+        const ativos = docs.filter((p) => p.ativo !== false)
+        ativos.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
+        setProdutos(ativos)
+        setLoadingProdutos(false)
+      },
+      (err) => {
+        console.error('[Caixa] onSnapshot produtos error:', err.code, err.message)
+        toast.error(`Erro ao carregar produtos: ${err.code}`)
+        setLoadingProdutos(false)
       }
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim()
-        data = data.filter((p) => String(p.nome).toLowerCase().includes(q))
-      }
-
-      // Sort alphabetically by name
-      data.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
-
-      setProdutos(data)
-    } catch (err) {
-      console.error('Erro ao carregar produtos:', err)
-      toast.error('Erro ao carregar produtos')
-    } finally {
-      setLoadingProdutos(false)
-    }
-  }, [selectedCategoria, searchQuery])
+    )
+    return unsub
+  }, [])
 
   const fetchCaixa = useCallback(async () => {
     try {
@@ -213,10 +201,6 @@ export default function CaixaView() {
       setLoadingCaixa(false)
     }
   }, [])
-
-  useEffect(() => {
-    fetchProdutos()
-  }, [fetchProdutos])
 
   useEffect(() => {
     fetchCaixa()
