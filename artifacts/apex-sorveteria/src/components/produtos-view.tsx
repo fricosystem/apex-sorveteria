@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import * as FS from '@/lib/firestore-service'
+import { FirebaseDiagnosticModal } from '@/components/firebase-diagnostic-modal'
 
 import {
   Card,
@@ -123,6 +124,7 @@ export default function ProdutosView() {
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
+  const [diagOpen, setDiagOpen] = useState(false)
 
   const form = useForm<ProdutoFormData>({
     resolver: zodResolver(produtoSchema),
@@ -314,16 +316,32 @@ export default function ProdutosView() {
           <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-destructive">Erro ao carregar produtos</p>
-            <p className="text-xs text-destructive/80 mt-0.5 break-all">{fetchError}</p>
+            <p className="text-xs text-destructive/80 mt-0.5 break-all font-mono">{fetchError}</p>
           </div>
-          <button
-            onClick={() => setRetryCount(c => c + 1)}
-            className="text-xs text-destructive underline underline-offset-2 shrink-0"
-          >
-            Tentar novamente
-          </button>
+          <div className="flex flex-col gap-1 shrink-0">
+            <button
+              onClick={() => setDiagOpen(true)}
+              className="text-xs text-destructive underline underline-offset-2"
+            >
+              Como resolver
+            </button>
+            <button
+              onClick={() => setRetryCount(c => c + 1)}
+              className="text-xs text-destructive/70 underline underline-offset-2"
+            >
+              Tentar novamente
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Firebase Diagnostic Modal */}
+      <FirebaseDiagnosticModal
+        open={diagOpen}
+        onOpenChange={setDiagOpen}
+        errorCode={fetchError?.split(':')[0] ?? null}
+        errorMessage={fetchError?.split(':').slice(1).join(':').trim() ?? null}
+      />
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
