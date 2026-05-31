@@ -344,7 +344,7 @@ export default function AuthPage() {
             {/* Divider */}
             <div className="mt-5 sm:mt-6 flex items-center gap-3">
               <Separator className="flex-1 bg-gray-200 dark:bg-gray-600" />
-              <span className="text-xs text-gray-400 dark:text-gray-500">seguro com</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">desenvolvido por</span>
               <Separator className="flex-1 bg-gray-200 dark:bg-gray-600" />
             </div>
 
@@ -365,7 +365,7 @@ export default function AuthPage() {
           }`}
         >
           <p className="text-[11px] sm:text-xs text-gray-400 dark:text-gray-500">
-            © {new Date().getFullYear()} APEX Sorveteria. Todos os direitos reservados.
+            © {new Date().getFullYear()} APEX HUB. Todos os direitos reservados.
           </p>
         </div>
       </div>
