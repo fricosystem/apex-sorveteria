@@ -1,8 +1,0 @@
-uploads = []
-generated = []
-
-[[outputs]]
-id = "e9t2qWqbAw2Xbgoszc1LA"
-uri = "file://vercel-variaveis.md"
-type = "text"
-title = "Guia — Variáveis de Ambiente no Vercel"
