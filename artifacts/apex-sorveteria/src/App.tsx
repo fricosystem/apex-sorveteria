@@ -45,11 +45,11 @@ function AppContent() {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-rose-50 via-orange-50 to-amber-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-black shadow-xl shadow-rose-500/25 overflow-hidden">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden">
             <img
               src="/icon-512.png"
               alt="APEX Logo"
-              className="h-10 w-10 object-contain"
+              className="w-full h-full object-cover"
             />
           </div>
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-rose-200 border-t-rose-600" />
@@ -85,11 +85,11 @@ function AppContent() {
       >
         {/* Brand */}
         <div className="flex h-14 items-center gap-3 border-b px-3 sm:px-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black overflow-hidden">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden">
             <img
               src="/icon-512.png"
               alt="APEX Logo"
-              className="h-6 w-6 object-contain"
+              className="w-full h-full object-cover"
             />
           </div>
           <div className="flex-1 min-w-0">

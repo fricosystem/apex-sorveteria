@@ -134,11 +134,11 @@ export default function AuthPage() {
           }`}
         >
           <div className="relative">
-            <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl sm:rounded-3xl bg-black shadow-xl shadow-rose-500/25 overflow-hidden">
+            <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl sm:rounded-3xl overflow-hidden">
               <img
                 src="/icon-512.png"
                 alt="APEX Logo"
-                className="h-12 w-12 sm:h-14 sm:w-14 object-contain"
+                className="w-full h-full object-cover"
               />
             </div>
             <div className="absolute -top-1 -right-1 flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-amber-400 shadow-md">
